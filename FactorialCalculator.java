@@ -26,27 +26,32 @@ import java.util.concurrent.Callable;
 public class FactorialCalculator {
 
     private static ExecutorService executor = Executors.newFixedThreadPool(10);                // executor with 10 consumer threads
-    private static BlockingQueue<Future<FactNumber>> queue = new ArrayBlockingQueue<>(100);     // queue to hold calculation objects
+    private static BlockingQueue<Future<FactNumber>> futuresQueue = new ArrayBlockingQueue<>(100);     // futuresQueue to hold calculation objects
     private static int min = 1;
     private static int max = 10;
 
     public static void main(String[] args) throws InterruptedException, ExecutionException {
 
-        Producer producer = new Producer(executor, queue, min, max);
+        Producer producer = new Producer(executor, futuresQueue, min, max);
         Thread thread = new Thread(producer);
         thread.start();
 
+        processTaskResults();
 
-        for(int i=1; i <= queue.remainingCapacity(); i++){
+        executor.shutdown();
 
-            Future<FactNumber> future = queue.take();       // will block main thread, till the future object calculation is done, then only loop will move on to next future object
+    }
+
+    private static void processTaskResults() throws InterruptedException, ExecutionException {
+
+        for(int i = 1; i <= futuresQueue.remainingCapacity(); i++){
+
+            Future<FactNumber> future = futuresQueue.take();       // will block main thread, till the future object calculation is done, then only loop will move on to next future object
             FactNumber factNumber = future.get();
 
             System.out.println(String.format("Number: %s, Factorial: %s", factNumber.getNumber(), factNumber.getFactorial()));
 
         }
-
-        executor.shutdown();
 
     }
 
@@ -56,13 +61,13 @@ public class FactorialCalculator {
 class Producer implements Runnable {
 
     private ExecutorService executor;
-    private BlockingQueue<Future<FactNumber>> queue;
+    private BlockingQueue<Future<FactNumber>> futuresQueue;
     private int min;
     private int max;
 
     public Producer(ExecutorService executor, BlockingQueue<Future<FactNumber>> queue, int min, int max) {
         this.executor = executor;
-        this.queue = queue;
+        this.futuresQueue = queue;
         this.min = min;
         this.max = max;
     }
@@ -72,28 +77,38 @@ class Producer implements Runnable {
 
         System.out.println("Producer thread is up and running...");
 
-//        while(true){      // to produce unlimited tasks
         int i=1;
         while (i<=15){      // produces 15 tasks
+
             int number = getRandomNumberInRange(min, max);
-
             FactNumber factNumber = new FactNumber(number);
-            Task task = new Task(factNumber);
 
-            Future<FactNumber> future = executor.submit(task);
+            Future<FactNumber> future = createAndSubmitTasksToExecutor(factNumber);
+            futuresQueue.add(future);
 
-            queue.add(future);
-
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
+            sleepForSeconds(1);
             i++;
         }
 
         System.out.println("Producer thread is done, now tearing down...");
+
+    }
+
+    private Future<FactNumber> createAndSubmitTasksToExecutor(FactNumber factNumber){
+
+        Task task = new Task(factNumber);
+        Future<FactNumber> future = executor.submit(task);
+
+        return future;
+    }
+
+    private void sleepForSeconds(int seconds){
+
+        try {
+            Thread.sleep(seconds * 1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
     }
 
@@ -128,6 +143,7 @@ class Task implements Callable<FactNumber> {
     }
 
 }
+
 
 class FactNumber {
 
