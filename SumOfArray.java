@@ -2,7 +2,11 @@ package org.learners.java.exercises;
 
 import java.util.Arrays;
 import java.util.Random;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  *
@@ -13,41 +17,69 @@ import java.util.concurrent.*;
  */
 public class SumOfArray {
 
+    private static int arrayLength = 10;
+    private static int threadCount = 4;
+
+    private static int array[] = new int[arrayLength];
+
+    private static ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+    private static Future<Integer>[] futures = new Future[threadCount];
+
+
     public static void main(String[] args) throws ExecutionException, InterruptedException {
 
-        int arrayLength = 10;
-         int threadCount = 4;
+        populateArrayWithRandomValues();
 
-        int[] array = new int[arrayLength];
+        printArray();
+
+        createAndSubmitTasksToExecutor();
+
+        int totalSum = aggregateIndividualThreadResults();
+
+        executor.shutdown();
+
+        System.out.println(String.format("\nTotal sum: %s", totalSum));
+
+    }
+
+    private static int aggregateIndividualThreadResults() throws ExecutionException, InterruptedException {
+
+        int totalSum = 0;
+
+        for(int k=0; k < futures.length; k++){
+            totalSum += futures[k].get();
+        }
+
+        return totalSum;
+    }
+
+
+    private static void populateArrayWithRandomValues(){
 
         for(int i=0; i<arrayLength; i++){
             array[i] = getRandomNumberInRange(1, 10);
         }
 
+    }
+
+    public static void printArray(){
         System.out.println(Arrays.toString(array));
         System.out.println();
+    }
 
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-        Future<Integer>[] futures = new Future[threadCount];
+    private static ExecutorService createAndSubmitTasksToExecutor(){
 
         for(int j=0; j < threadCount; j++){
 
-            int startIndex = (j * arrayLength) / threadCount;
-            int endIndex = (j + 1) * arrayLength / threadCount;
+            int startIndex = (j * array.length) / threadCount;
+            int endIndex = (j + 1) * array.length / threadCount;
 
             Task task = new Task(array, startIndex, endIndex);
 
             futures[j] = executor.submit(task);
         }
 
-        int totalSum = 0;
-        for(int k=0; k < threadCount; k++){
-            totalSum += futures[k].get();
-        }
-        executor.shutdown();
-
-        System.out.println(String.format("\nTotal sum: %s", totalSum));
-
+        return executor;
     }
 
     public static int getRandomNumberInRange(int min, int max){
